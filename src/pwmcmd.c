@@ -71,6 +71,9 @@ static void usage (FILE *stream)
 	fprintf (stream, "  -d | --device <dev>    use named device (default is %s)\n", DEFAULT_DEVICE);
 	fprintf (stream, "  -v | --verbose         be more verbose (incremental)\n");
 	fprintf (stream, "and commands are:\n");
+	fprintf (stream, "  0x..                   hexadecimal bytecode byte\n");
+	fprintf (stream, "  Wnnn                   wait nnn milliseconds\n");
+	fprintf (stream, "  S                      send constructed buffer to device\n");
 
 	return;
 }
@@ -86,6 +89,10 @@ static int dump_bytecodes (int fd)
 
 	if (!bytecode_len) {
 		return 0;
+	}
+
+	if (verbose) {
+		prog_info ("writing %d bytes...", bytecode_len);
 	}
 
 	i = write (fd, bytecode, bytecode_len);
@@ -228,8 +235,19 @@ int main (int argc, char **argv)
 				goto out_err;
 			}
 
+			if (verbose) {
+				prog_info ("sleeping for %d milliseconds...", ms);
+			}
 			if (usleep (ms * 1000)) {
 				prog_warning ("short sleep?: %s", strerror (errno));
+			}
+
+			/*}}}*/
+		} else if (**walk == 'S') {
+			/*{{{  send buffer to device*/
+			if (dump_bytecodes (dev_fd)) {
+				ret = EXIT_FAILURE;
+				goto out_err;
 			}
 
 			/*}}}*/
