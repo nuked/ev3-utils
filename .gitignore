@@ -16,3 +16,23 @@
 *.exe
 *.out
 *.app
+
+# Autoconf/automake stuff
+Makefile.in
+Makefile
+configure
+config.h
+config.h.in
+config.guess
+config.status
+config.sub
+config.log
+aclocal.m4
+autom4te.cache
+depcomp
+install-sh
+stamp-h1
+.deps
+missing
+*.in~
+
