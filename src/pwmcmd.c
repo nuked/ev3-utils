@@ -74,6 +74,15 @@ static void usage (FILE *stream)
 	fprintf (stream, "  0x..                   hexadecimal bytecode byte\n");
 	fprintf (stream, "  Wnnn                   wait nnn milliseconds\n");
 	fprintf (stream, "  S                      send constructed buffer to device\n");
+	fprintf (stream, "  start                  start program command (0x03)\n");
+	fprintf (stream, "  stop                   stop program command (0x02)\n");
+	fprintf (stream, "  Pnmm                   set power of motor 'n' (A,B,C,D) to 'mm' (0-100)\n");
+	fprintf (stream, "  On                     turn on motor 'n' (A,B,C,D)\n");
+	fprintf (stream, "  Fn                     turn off motor 'n' (A,B,C,D)\n");
+	fprintf (stream, "example:\n");
+	fprintf (stream, "  %s -d /dev/ev3dev_pwm start S PA30 S OA W500 PA50 W200 FA S stop\n", progname);
+	fprintf (stream, "note: the current driver only handles a single command at a time, so these\n");
+	fprintf (stream, "must be explicitly flushed (S) before the next, or implicitly before a wait (Wnnn).\n");
 
 	return;
 }
@@ -214,6 +223,69 @@ int main (int argc, char **argv)
 			}
 			/* pop it in */
 			bytecode[bytecode_len++] = (char)v;
+			/*}}}*/
+		} else if (!strcmp (*walk, "start")) {
+			/*{{{  start program*/
+			bytecode[bytecode_len++] = 0x03;
+			/*}}}*/
+		} else if (!strcmp (*walk, "stop")) {
+			/*{{{  stop program*/
+			bytecode[bytecode_len++] = 0x02;
+			/*}}}*/
+		} else if (**walk == 'P') {
+			/*{{{  set power*/
+			int pwr;
+			int mot;
+
+			if (sscanf ((*walk) + 2, "%d", &pwr) != 1) {
+				prog_error ("bad power setting [%s]", (*walk) + 2);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			} else if ((pwr < 0) || (pwr > 100)) {
+				prog_error ("bad power value (%d), must be 0-100", pwr);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			} else if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa4;
+			bytecode[bytecode_len++] = (char)mot;
+			bytecode[bytecode_len++] = (char)pwr;
+			/*}}}*/
+		} else if (**walk == 'O') {
+			/*{{{  turn output on*/
+			int mot;
+
+			if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa6;
+			bytecode[bytecode_len++] = (char)mot;
+			/*}}}*/
+		} else if (**walk == 'F') {
+			/*{{{  turn output off*/
+			int mot;
+
+			if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa3;
+			bytecode[bytecode_len++] = (char)mot;
 			/*}}}*/
 		} else if (**walk == 'W') {
 			/*{{{  wait specified time in milliseconds*/
