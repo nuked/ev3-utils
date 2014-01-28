@@ -78,7 +78,9 @@ static void usage (FILE *stream)
 	fprintf (stream, "  stop                   stop program command (0x02)\n");
 	fprintf (stream, "  Pnmm                   set power of motor 'n' (A,B,C,D) to 'mm' (0-100)\n");
 	fprintf (stream, "  On                     turn on motor 'n' (A,B,C,D)\n");
-	fprintf (stream, "  Fn                     turn off motor 'n' (A,B,C,D)\n");
+	fprintf (stream, "  Fn                     turn off motor 'n' (A,B,C,D) and float\n");
+	fprintf (stream, "  Bn                     turn off motor 'n' (A,B,C,D) and brake\n");
+	fprintf (stream, "  Dnd                    set direction of motor 'n' (A,B,C,D) to 'd' (-1,1)\n");
 	fprintf (stream, "example:\n");
 	fprintf (stream, "  %s -d /dev/ev3dev_pwm start S PA30 S OA W500 PA50 W200 FA S stop\n", progname);
 	fprintf (stream, "note: the current driver only handles a single command at a time, so these\n");
@@ -273,7 +275,7 @@ int main (int argc, char **argv)
 			bytecode[bytecode_len++] = (char)mot;
 			/*}}}*/
 		} else if (**walk == 'F') {
-			/*{{{  turn output off*/
+			/*{{{  turn output off (and float)*/
 			int mot;
 
 			if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
@@ -286,6 +288,43 @@ int main (int argc, char **argv)
 
 			bytecode[bytecode_len++] = 0xa3;
 			bytecode[bytecode_len++] = (char)mot;
+			bytecode[bytecode_len++] = 0x00;		/* float */
+			/*}}}*/
+		} else if (**walk == 'B') {
+			/*{{{  turn output off (and brake)*/
+			int mot;
+
+			if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa3;
+			bytecode[bytecode_len++] = (char)mot;
+			bytecode[bytecode_len++] = 0x01;		/* brake */
+			/*}}}*/
+		} else if (**walk == 'D') {
+			/*{{{  set polarity, 1 or -1*/
+			int mot;
+
+			if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa7;
+			bytecode[bytecode_len++] = (char)mot;
+			if ((*walk)[2] == '1') {
+				bytecode[bytecode_len++] = 0x01;		/* forward */
+			} else {
+				bytecode[bytecode_len++] = 0xff;		/* reverse */
+			}
 			/*}}}*/
 		} else if (**walk == 'W') {
 			/*{{{  wait specified time in milliseconds*/
