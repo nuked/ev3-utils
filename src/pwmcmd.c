@@ -73,16 +73,18 @@ static void usage (FILE *stream)
 	fprintf (stream, "and commands are:\n");
 	fprintf (stream, "  0x..                   hexadecimal bytecode byte\n");
 	fprintf (stream, "  Wnnn                   wait nnn milliseconds\n");
-	fprintf (stream, "  S                      send constructed buffer to device\n");
+	fprintf (stream, "  send                   send constructed buffer to device\n");
 	fprintf (stream, "  start                  start program command (0x03)\n");
 	fprintf (stream, "  stop                   stop program command (0x02)\n");
 	fprintf (stream, "  Pnmm                   set power of motor 'n' (A,B,C,D) to 'mm' (0-100)\n");
+	fprintf (stream, "  Snmm                   set speed of motor 'n' (A,B,C,D) to 'mm' (0-100)\n");
 	fprintf (stream, "  On                     turn on motor 'n' (A,B,C,D)\n");
 	fprintf (stream, "  Fn                     turn off motor 'n' (A,B,C,D) and float\n");
 	fprintf (stream, "  Bn                     turn off motor 'n' (A,B,C,D) and brake\n");
 	fprintf (stream, "  Dnd                    set direction of motor 'n' (A,B,C,D) to 'd' (-1,1)\n");
+	fprintf (stream, "  Tabcd                  set motor types (0=none,1=tacho,2=minitacho,3=newtacho)\n");
 	fprintf (stream, "example:\n");
-	fprintf (stream, "  %s -d /dev/ev3dev_pwm start S PA30 S OA W500 PA50 W200 FA S stop\n", progname);
+	fprintf (stream, "  %s -d /dev/ev3dev_pwm start send T1000 send PA30 send OA W500 PA50 W200 FA send stop\n", progname);
 	fprintf (stream, "note: the current driver only handles a single command at a time, so these\n");
 	fprintf (stream, "must be explicitly flushed (S) before the next, or implicitly before a wait (Wnnn).\n");
 
@@ -102,7 +104,20 @@ static int dump_bytecodes (int fd)
 		return 0;
 	}
 
-	if (verbose) {
+	if (verbose > 1) {
+		int i;
+		char *hex = "0123456789ABCDEF";
+		char xbuf[128];
+		int xlen = 0;
+
+		xlen += snprintf (xbuf, 128 - xlen, "writing %d bytes: ", bytecode_len);
+		for (i=0; i<bytecode_len; i++) {
+			xlen += snprintf (xbuf + xlen, 128 - xlen, "%c", hex[(bytecode[i] >> 4) & 0x0f]);
+			xlen += snprintf (xbuf + xlen, 128 - xlen, "%c", hex[(bytecode[i]) & 0x0f]);
+		}
+		prog_info ("%s", xbuf);
+
+	} else if (verbose) {
 		prog_info ("writing %d bytes...", bytecode_len);
 	}
 
@@ -234,6 +249,14 @@ int main (int argc, char **argv)
 			/*{{{  stop program*/
 			bytecode[bytecode_len++] = 0x02;
 			/*}}}*/
+		} else if (!strcmp (*walk, "send")) {
+			/*{{{  send buffer to device*/
+			if (dump_bytecodes (dev_fd)) {
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			/*}}}*/
 		} else if (**walk == 'P') {
 			/*{{{  set power*/
 			int pwr;
@@ -258,6 +281,31 @@ int main (int argc, char **argv)
 			bytecode[bytecode_len++] = 0xa4;
 			bytecode[bytecode_len++] = (char)mot;
 			bytecode[bytecode_len++] = (char)pwr;
+			/*}}}*/
+		} else if (**walk == 'S') {
+			/*{{{  set speed*/
+			int spd;
+			int mot;
+
+			if (sscanf ((*walk) + 2, "%d", &spd) != 1) {
+				prog_error ("bad speed setting [%s]", (*walk) + 2);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			} else if ((spd < 0) || (spd > 100)) {
+				prog_error ("bad speed value (%d), must be 0-100", spd);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			} else if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa5;
+			bytecode[bytecode_len++] = (char)mot;
+			bytecode[bytecode_len++] = (char)spd;
 			/*}}}*/
 		} else if (**walk == 'O') {
 			/*{{{  turn output on*/
@@ -354,13 +402,31 @@ int main (int argc, char **argv)
 			}
 
 			/*}}}*/
-		} else if (**walk == 'S') {
-			/*{{{  send buffer to device*/
-			if (dump_bytecodes (dev_fd)) {
-				ret = EXIT_FAILURE;
-				goto out_err;
-			}
+		} else if (**walk == 'T') {
+			/*{{{  set motor types*/
+			int j;
 
+			bytecode[bytecode_len++] = 0xa1;
+			for (j=0; j<4; j++) {
+				switch ((*walk)[j+1]) {
+				case '0':
+					bytecode[bytecode_len++] = 126;		/* TYPE_NONE */
+					break;
+				case '1':
+					bytecode[bytecode_len++] = 7;		/* TYPE_TACHO */
+					break;
+				case '2':
+					bytecode[bytecode_len++] = 8;		/* TYPE_MINITACHO */
+					break;
+				case '3':
+					bytecode[bytecode_len++] = 9;		/* TYPE_NEWTACHO */
+					break;
+				default:
+					prog_error ("bad value for motor type '%c', must be 0-3", (*walk)[j+1]);
+					ret = EXIT_FAILURE;
+					goto out_err;
+				}
+			}
 			/*}}}*/
 		}
 	}
