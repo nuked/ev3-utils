@@ -83,6 +83,7 @@ static void usage (FILE *stream)
 	fprintf (stream, "  Bn                     turn off motor 'n' (A,B,C,D) and brake\n");
 	fprintf (stream, "  Dnd                    set direction of motor 'n' (A,B,C,D) to 'd' (-1,1)\n");
 	fprintf (stream, "  Tabcd                  set motor types (0=none,1=tacho,2=minitacho,3=newtacho)\n");
+	fprintf (stream, "  Rn                     reset motor 'n' (A,B,C,D)\n");
 	fprintf (stream, "example:\n");
 	fprintf (stream, "  %s -d /dev/ev3dev_pwm start send T1000 send PA30 send OA W500 PA50 W200 FA send stop\n", progname);
 	fprintf (stream, "note: the current driver only handles a single command at a time, so these\n");
@@ -320,6 +321,21 @@ int main (int argc, char **argv)
 			mot = 1 << ((*walk)[1] - 'A');
 
 			bytecode[bytecode_len++] = 0xa6;
+			bytecode[bytecode_len++] = (char)mot;
+			/*}}}*/
+		} else if (**walk == 'R') {
+			/*{{{  reset motor*/
+			int mot;
+
+			if (((*walk)[1] < 'A') || ((*walk)[1] > 'D')) {
+				prog_error ("bad motor '%c', must be A-D", (*walk)[1]);
+				ret = EXIT_FAILURE;
+				goto out_err;
+			}
+
+			mot = 1 << ((*walk)[1] - 'A');
+
+			bytecode[bytecode_len++] = 0xa2;
 			bytecode[bytecode_len++] = (char)mot;
 			/*}}}*/
 		} else if (**walk == 'F') {
